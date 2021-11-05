@@ -2,11 +2,13 @@ import cv2
 import pandas as pd
 from math import atan2,degrees
 import numpy as np
+from os.path import join
 from multiprocessing import Pool, cpu_count
 from matplotlib import pyplot as plt
 
 DROPBOX_LOCATION = "./dropbox_things/DroneImages/"
-CH_NAMES = ["red", "green", "blue"]# , "red edge", "nir"]
+CSV_LOCATION = "./square_coords.csv"
+CH_NAMES = ["red", "green", "blue", "red edge", "nir"]
 IMAGE_MARGIN = 300  # margin around each calibration point
 
 def _normalize_img(im):
@@ -33,9 +35,10 @@ def _transform_dfpoints(row, mat):
         row[x], row[y] = nx, ny
     return row
 
-def _preprocess_single_image(row, minwidth):
+def _preprocess_single_image(row, minwidth, image_location):
     channels = []
-    for fp in [f"{DROPBOX_LOCATION}{row['fileprefix']}_{channel}.tif" for channel in CH_NAMES]:
+    paths = [join(image_location, f"{row['fileprefix']}_{channel}.tif") for channel in CH_NAMES]
+    for fp in paths:
         channels.append(cv2.imread(fp, cv2.IMREAD_ANYDEPTH))
 
     img = cv2.merge(channels)
@@ -63,13 +66,19 @@ def _preprocess_single_image(row, minwidth):
                              dsize=(int(row["br_x"]+IMAGE_MARGIN), int(row["br_y"]+IMAGE_MARGIN)))
     return rotated
 
-def load_images(multiprocess=False):
+def load_images(image_location=DROPBOX_LOCATION, csv_location=CSV_LOCATION, multiprocess=False):
     """
-    Loads images, if the DROPBOX_LOCATION is set correctly at the top of the file.
-    If multiprocess is false, yields the images one by one so it's not too hard on memory.
-    Otherwise, loads them all at once and uses multithreading to process faster.
+    image_location: location of the drone image folder.
+    csv_location: location of square_coords.csv
+    multiprocess: runs the preprocessing parallel if true. Takes up a lot of memory(~10gb)
+    since it loads every image at the same time. If false, yields images one by one instead.
+
+    returns: list of numpy arrays (width, height, 5). Note that the widths and heights are not
+    all the exact same.
+    Images are scaled to the smallest image, rotated so the two top squares of the crop are level,
+    and normalized with mean 0 and std deviation 1.
     """
-    calib = pd.read_csv("square_coords.csv")
+    calib = pd.read_csv(csv_location)
     calib = _get_widthnangle(calib)
 
     minwidth = calib["width"].min()  # For scaling each image to the smallest image.
@@ -77,12 +86,12 @@ def load_images(multiprocess=False):
     if multiprocess:
         with Pool(cpu_count()) as p:
             out = p.starmap(_preprocess_single_image,
-                            [(calib.iloc[i], minwidth) for i in range(len(calib))])
+                            [(calib.iloc[i], minwidth, image_location) for i in range(len(calib))])
             return out
     else:
         for i in range(len(calib)):
             row = calib.iloc[i]
-            yield _preprocess_single_image(row, minwidth)
+            yield _preprocess_single_image(row, minwidth, image_location)
         return
 
 
@@ -90,5 +99,5 @@ if __name__ == "__main__":
     imgs = load_images()
     for img in imgs:
         cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
-        plt.imshow(img)
+        plt.imshow(img[...,:3])
         plt.show()
