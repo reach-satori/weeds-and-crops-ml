@@ -3,9 +3,10 @@ import pandas as pd
 from math import atan2,degrees
 import numpy as np
 from multiprocessing import Pool, cpu_count
+from matplotlib import pyplot as plt
 
 DROPBOX_LOCATION = "./dropbox_things/DroneImages/"
-CH_NAMES = ["red", "green", "blue", "red edge", "nir"]
+CH_NAMES = ["red", "green", "blue"]# , "red edge", "nir"]
 IMAGE_MARGIN = 300  # margin around each calibration point
 
 def _normalize_img(im):
@@ -62,17 +63,32 @@ def _preprocess_single_image(row, minwidth):
                              dsize=(int(row["br_x"]+IMAGE_MARGIN), int(row["br_y"]+IMAGE_MARGIN)))
     return rotated
 
-def load_images():
+def load_images(multiprocess=False):
+    """
+    Loads images, if the DROPBOX_LOCATION is set correctly at the top of the file.
+    If multiprocess is false, yields the images one by one so it's not too hard on memory.
+    Otherwise, loads them all at once and uses multithreading to process faster.
+    """
     calib = pd.read_csv("square_coords.csv")
     calib = _get_widthnangle(calib)
 
     minwidth = calib["width"].min()  # For scaling each image to the smallest image.
     calib.drop(index=6, axis=0, inplace=True)  # There's an image where the crop gets cut off.
-    with Pool(cpu_count()) as p:
-        out = p.starmap(_preprocess_single_image,
-                        [(calib.iloc[i], minwidth) for i in range(len(calib))])
-    return out
+    if multiprocess:
+        with Pool(cpu_count()) as p:
+            out = p.starmap(_preprocess_single_image,
+                            [(calib.iloc[i], minwidth) for i in range(len(calib))])
+            return out
+    else:
+        for i in range(len(calib)):
+            row = calib.iloc[i]
+            yield _preprocess_single_image(row, minwidth)
+        return
 
 
 if __name__ == "__main__":
-    load_images()
+    imgs = load_images()
+    for img in imgs:
+        cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
+        plt.imshow(img)
+        plt.show()
