@@ -46,7 +46,8 @@ def _preprocess_single_image(row, minwidth, image_location):
     img = _normalize_img(img)
 
     # rotate around the top left calibration point
-    rotmat = cv2.getRotationMatrix2D(center = tuple(row[["tl_x", "tl_y"]].values),
+    ctr = tuple(i.item() for i in row[["tl_x", "tl_y"]].values)
+    rotmat = cv2.getRotationMatrix2D(center=ctr,
                                      angle=degrees(row["angle"]),
                                      scale=minwidth/row["width"])
 
