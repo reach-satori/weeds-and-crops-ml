@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 DROPBOX_LOCATION = "./dropbox_things/DroneImages/"
 CSV_LOCATION = "./square_coords.csv"
 CH_NAMES = ["red", "green", "blue", "red edge", "nir"]
-IMAGE_MARGIN = 300  # margin around each calibration point
+IMAGE_MARGIN = 50  # margin around each calibration point
 
 def _normalize_img(im):
     mean, std = np.nanmean(im), np.nanstd(im)
@@ -19,16 +19,19 @@ def _normalize_img(im):
 def _get_widthnangle(df):
     angles = []
     widths = []
+    heights = []
     for i, row in df.iterrows():
         angles.append(atan2(row["tr_y"] - row["tl_y"],
                             row["tr_x"] - row["tl_x"]))
         widths.append(np.linalg.norm([row["tr_x"] - row["tl_x"],row["tr_y"] - row["tl_y"]]))
+        heights.append(np.linalg.norm([row["br_x"] - row["tr_x"],row["br_y"] - row["tr_y"]]))
     df["angle"] = pd.Series(angles)  # angle from the top left calibration square to the top right
-    df["width"] = pd.Series(widths)  # width from top left calibration square to the top right
+    df["width"] = pd.Series(widths)  # sidelen from top left square to the top right
+    df["height"] = pd.Series(heights)  # sidelen from top right square to the bottom right
     return df
 
 def _transform_dfpoints(row, mat):
-    points = iter(row.drop(["fileprefix", "width","angle"]).index)
+    points = iter(row.drop(["fileprefix", "width","angle", "height"]).index)
     for x in points:
         y = next(points)
         arr = np.array([[row[x]],[row[y]],[1.]], dtype=np.float32)
@@ -36,7 +39,7 @@ def _transform_dfpoints(row, mat):
         row[x], row[y] = nx, ny
     return row
 
-def _preprocess_single_image(row, minwidth, image_location):
+def _preprocess_single_image(row, minwidth, minheight, image_location):
     channels = []
     paths = [join(image_location, f"{row['fileprefix']}_{channel}.tif") for channel in CH_NAMES]
     for fp in paths:
@@ -66,6 +69,14 @@ def _preprocess_single_image(row, minwidth, image_location):
     rotated = cv2.warpAffine(rotated,  # apply translation to image
                              M=transmat,
                              dsize=(int(row["br_x"]+IMAGE_MARGIN), int(row["br_y"]+IMAGE_MARGIN)))
+
+    print(rotated.shape)
+    # final size adjustment, resizes only by ~20 pixels max
+    rotated = cv2.resize(rotated,
+                         (int(minwidth + 2*IMAGE_MARGIN), int(minheight + 2*IMAGE_MARGIN)),
+                         interpolation=cv2.INTER_CUBIC)
+    print(rotated.shape)
+
     return rotated
 
 def load_images(image_location=DROPBOX_LOCATION, csv_location=CSV_LOCATION, multiprocess=False):
@@ -83,23 +94,26 @@ def load_images(image_location=DROPBOX_LOCATION, csv_location=CSV_LOCATION, mult
     calib = pd.read_csv(csv_location)
     calib = _get_widthnangle(calib)
 
-    minwidth = calib["width"].min()  # For scaling each image to the smallest image.
+    smallrow = calib["width"].idxmin()
+    minwidth = calib.iloc[smallrow]["width"]
+    minheight = calib.iloc[smallrow]["height"]  # For scaling each image to the smallest image.
     calib.drop(index=6, axis=0, inplace=True)  # There's an image where the crop gets cut off.
     if multiprocess:
         with Pool(cpu_count()) as p:
             out = p.starmap(_preprocess_single_image,
-                            [(calib.iloc[i], minwidth, image_location) for i in range(len(calib))])
+                            [(calib.iloc[i], minwidth, minheight, image_location) for i in range(len(calib))])
             return out
     else:
         for i in range(len(calib)):
             row = calib.iloc[i]
-            yield _preprocess_single_image(row, minwidth, image_location)
+            yield _preprocess_single_image(row, minwidth, minheight, image_location)
         return
 
 
 if __name__ == "__main__":
     imgs = load_images()
     for img in imgs:
+        img = img[...,:3].copy()
         img = cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
         plt.imshow(img[...,:3])
         plt.show()
