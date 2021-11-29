@@ -6,6 +6,7 @@ from os.path import join
 from multiprocessing import Pool, cpu_count
 from matplotlib import pyplot as plt
 
+
 DROPBOX_LOCATION = "./dropbox_things/DroneImages/"
 CSV_LOCATION = "./square_coords.csv"
 CH_NAMES = ["red", "green", "blue", "red edge", "nir"]
@@ -99,6 +100,6 @@ def load_images(image_location=DROPBOX_LOCATION, csv_location=CSV_LOCATION, mult
 if __name__ == "__main__":
     imgs = load_images()
     for img in imgs:
-        cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
+        img = cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
         plt.imshow(img[...,:3])
         plt.show()
