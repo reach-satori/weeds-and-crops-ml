@@ -21,9 +21,11 @@ def _get_widthnangle(df):
     widths = []
     heights = []
     for i, row in df.iterrows():
-        angletop = atan2(row["tr_y"] - row["tl_y"], row["tr_x"] - row["tl_x"])
-        anglebot = atan2(row["br_y"] - row["bl_y"], row["br_x"] - row["bl_x"])
-        angles.append(np.mean([angletop,anglebot]))
+        atop = atan2(row["tr_y"] - row["tl_y"], row["tr_x"] - row["tl_x"])
+        abot = atan2(row["br_y"] - row["bl_y"], row["br_x"] - row["bl_x"])
+        aleft = atan2(row["tl_y"] - row["bl_y"], row["tl_x"] - row["bl_x"])
+        aright = atan2(row["tr_y"] - row["br_y"], row["tr_x"] - row["br_x"])
+        angles.append(np.mean([atop, abot, aright + np.pi/2, aleft + np.pi/2]))
         widths.append(np.linalg.norm([row["tr_x"] - row["tl_x"],row["tr_y"] - row["tl_y"]]))
         heights.append(np.linalg.norm([row["br_x"] - row["tr_x"],row["br_y"] - row["tr_y"]]))
     df["angle"] = pd.Series(angles)  # angle from the top left calibration square to the top right
