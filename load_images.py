@@ -21,8 +21,9 @@ def _get_widthnangle(df):
     widths = []
     heights = []
     for i, row in df.iterrows():
-        angles.append(atan2(row["tr_y"] - row["tl_y"],
-                            row["tr_x"] - row["tl_x"]))
+        angletop = atan2(row["tr_y"] - row["tl_y"], row["tr_x"] - row["tl_x"])
+        anglebot = atan2(row["br_y"] - row["bl_y"], row["br_x"] - row["bl_x"])
+        angles.append(np.mean([angletop,anglebot]))
         widths.append(np.linalg.norm([row["tr_x"] - row["tl_x"],row["tr_y"] - row["tl_y"]]))
         heights.append(np.linalg.norm([row["br_x"] - row["tr_x"],row["br_y"] - row["tr_y"]]))
     df["angle"] = pd.Series(angles)  # angle from the top left calibration square to the top right
@@ -71,7 +72,7 @@ def _preprocess_single_image(row, minwidth, minheight, image_location):
                              dsize=(int(row["br_x"]+IMAGE_MARGIN), int(row["br_y"]+IMAGE_MARGIN)))
 
     print(rotated.shape)
-    # final size adjustment, resizes only by ~20 pixels max
+    # final size adjustment, resizes only by ~20 pixels max.
     rotated = cv2.resize(rotated,
                          (int(minwidth + 2*IMAGE_MARGIN), int(minheight + 2*IMAGE_MARGIN)),
                          interpolation=cv2.INTER_CUBIC)
@@ -109,11 +110,33 @@ def load_images(image_location=DROPBOX_LOCATION, csv_location=CSV_LOCATION, mult
             yield _preprocess_single_image(row, minwidth, minheight, image_location)
         return
 
+def block_breakup(img):
+    lines = open("plot_corners.csv", "r").readlines()
+    coords = []
+    h, w, _ = img.shape
+    for line in lines:
+        line = tuple(int(i) for i in (line.rstrip().split(",")))
+        coords.append(line)
+    coords = np.array(coords, dtype=np.int32)
+    leftside, rightside = coords[0::2], coords[1::2]  # csv file alternates left and right plots
+    xleft, xright = int(np.mean(leftside[:,0])), int(np.mean(rightside[:,0]))
+
+    img = cv2.line(img, (xleft, 0), (xleft, h), (255,0,0))
+    img = cv2.line(img, (xright, 0), (xright, h), (255,0,0))
+    for pt in leftside:
+        img = cv2.line(img, (0, pt[1]), (xleft, pt[1]), (255,0,0))
+    for pt in rightside:
+        img = cv2.line(img, (xright, pt[1]), (w, pt[1]), (255,0,0))
+
+    plt.imshow(img)
+    plt.show()
+
 
 if __name__ == "__main__":
     imgs = load_images()
     for img in imgs:
         img = img[...,:3].copy()
         img = cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
-        plt.imshow(img[...,:3])
-        plt.show()
+        block_breakup(img)
+        # plt.imshow(img[...,:3])
+        # plt.show()
