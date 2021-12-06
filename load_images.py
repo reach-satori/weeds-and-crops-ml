@@ -123,15 +123,14 @@ def block_breakup(img):
     leftside, rightside = coords[0::2], coords[1::2]  # csv file alternates left and right plots
     xleft, xright = int(np.mean(leftside[:,0])), int(np.mean(rightside[:,0]))
 
-    img = cv2.line(img, (xleft, 0), (xleft, h), (255,0,0))
-    img = cv2.line(img, (xright, 0), (xright, h), (255,0,0))
-    for pt in leftside:
-        img = cv2.line(img, (0, pt[1]), (xleft, pt[1]), (255,0,0))
-    for pt in rightside:
-        img = cv2.line(img, (xright, pt[1]), (w, pt[1]), (255,0,0))
-
-    plt.imshow(img)
-    plt.show()
+    prevy = 0
+    for pt in reversed(leftside):
+        yield img[prevy:pt[1], 0:xleft, :]
+        prevy = pt[1]
+    prevy = 0
+    for pt in reversed(rightside):
+        yield img[prevy:pt[1], xright:, :]
+        prevy = pt[1]
 
 
 if __name__ == "__main__":
@@ -139,6 +138,8 @@ if __name__ == "__main__":
     for img in imgs:
         img = img[...,:3].copy()
         img = cv2.normalize(img, img, 0, 1, cv2.NORM_MINMAX)
-        block_breakup(img)
+        for im in block_breakup(img):
+            plt.imshow(im)
+            plt.show()
         # plt.imshow(img[...,:3])
         # plt.show()
