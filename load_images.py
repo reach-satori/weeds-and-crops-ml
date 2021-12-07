@@ -132,6 +132,18 @@ def block_breakup(img):
         yield img[prevy:pt[1], xright:, :]
         prevy = pt[1]
 
+def viz_preprocess(img):
+    """Returns a 3-channel image (or 1-channel, if the input is 1-channel) with a 0-255 RGB
+    image normalized on those 3 channels. Should look fine for visualization."""
+    if len(img.shape) == 2:
+        img = img.copy()
+    elif len(img.shape) >= 3:
+        img = img[...,:3].copy()
+    else:
+        raise TypeError("Wrong type of image")
+    img = _normalize_img(img)
+    return cv2.normalize(img, img, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
 
 if __name__ == "__main__":
     imgs = load_images()
