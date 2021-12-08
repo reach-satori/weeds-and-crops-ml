@@ -73,12 +73,10 @@ def _preprocess_single_image(row, minwidth, minheight, image_location):
                              M=transmat,
                              dsize=(int(row["br_x"]+IMAGE_MARGIN), int(row["br_y"]+IMAGE_MARGIN)))
 
-    print(rotated.shape)
     # final size adjustment, resizes only by ~20 pixels max.
     rotated = cv2.resize(rotated,
                          (int(minwidth + 2*IMAGE_MARGIN), int(minheight + 2*IMAGE_MARGIN)),
                          interpolation=cv2.INTER_CUBIC)
-    print(rotated.shape)
 
     return rotated
 
@@ -97,10 +95,12 @@ def load_images(image_location=DROPBOX_LOCATION, csv_location=CSV_LOCATION, mult
     calib = pd.read_csv(csv_location)
     calib = _get_widthnangle(calib)
 
-    smallrow = calib["width"].idxmin()
-    minwidth = calib.iloc[smallrow]["width"]
-    minheight = calib.iloc[smallrow]["height"]  # For scaling each image to the smallest image.
-    calib.drop(index=6, axis=0, inplace=True)  # There's an image where the crop gets cut off.
+    # hacky quick fix to an aligment problem with block_breakup
+    # smallrow = calib["width"].idxmin()
+    # minwidth = calib.iloc[smallrow]["width"]
+    # minheight = calib.iloc[smallrow]["height"]  # For scaling each image to the smallest image.
+    minheight = 3021
+    minwidth = 1185
     if multiprocess:
         with Pool(cpu_count()) as p:
             out = p.starmap(_preprocess_single_image,
